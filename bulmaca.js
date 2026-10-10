@@ -2537,6 +2537,29 @@ const btnKronometre = document.getElementById("btn-kronometre"); // 98. Adım
 const duraklatOverlayEl = document.getElementById("duraklat-overlay"); // 98. Adım
 const btnKronometreDevam = document.getElementById("btn-kronometre-devam"); // 98. Adım
 
+/* ======================================================================
+   MOBİL (telefon/tablet) -- 99+. Adım
+   EKRAN_KLAVYESI: dokunmatik (pointer: coarse) cihazlarda tarayıcının kendi
+   klavyesi yerine sayfanın altındaki Türkçe Q ekran klavyesi kullanılır
+   (Android'de silme tuşunun/Türkçe İ-ı'nın güvenilmezliği, iOS'un yazı
+   alanına yakınlaşması ve klavyenin ızgarayı örtmesi sorunlarını kökten
+   çözer). Fiziksel klavye bu cihazlarda da çalışır (bkz. tusaBas).
+   `?klavye=1` adres parametresi masaüstünde denemek için ekran klavyesini
+   zorla açar. TELEFON: dar ekran -- büyük boyutlar (>13) sunulmaz.
+   ====================================================================== */
+const EKRAN_KLAVYESI = window.matchMedia("(pointer: coarse)").matches ||
+  new URLSearchParams(location.search).has("klavye");
+const TELEFON = EKRAN_KLAVYESI && Math.min(window.innerWidth, window.innerHeight) <= 560;
+const TELEFON_EN_BUYUK_BOYUT = 13;
+const TELEFON_VARSAYILAN_BOYUT = "9";
+const dockEl = document.getElementById("mobil-dock");
+const dockMetinEl = document.getElementById("dock-metin");
+const dockOncekiEl = document.getElementById("dock-onceki");
+const dockSonrakiEl = document.getElementById("dock-sonraki");
+const dockKlavyeEl = document.getElementById("dock-klavye");
+const gridCerceveEl = document.querySelector(".grid-cerceve");
+let sessizSecim = false; // true iken hucreSec sayfayı kaydırmaz (ilk açılış)
+
 let bulmaca = null;     // { grid, yerlesenler }
 let harita = null;      // harita[r][c] = { yatay: kelimeIdx|null, dikey: kelimeIdx|null }
 let inputlar = null;    // inputlar[r][c] = <input> | null
@@ -2621,6 +2644,7 @@ async function yeniBulmacaUret() {
     gridiCiz();
     tanimlariCiz();
     istatistikGuncelle();
+    ilkKelimeyiSec();
 
     // 82. Adım (kullanıcı talebi): hedefOraniAsti=true olsa bile (siyah kare
     // oranı %20 hedefinin üstüne çıktığında) kullanıcıya artık bir uyarı
@@ -3264,7 +3288,7 @@ function istatistikGuncelle() {
   // bakmadan doğrudan görebilmesi için.
   yazdirBaslikEl.textContent =
     "Bulmaca Masası — " + GRID_SATIR + "×" + GRID_SUTUN +
-    " — " + bulmaca.yerlesenler.length + " kelime — sürüm 2026-10-10-g103";
+    " — " + bulmaca.yerlesenler.length + " kelime — sürüm 2026-10-10-g104";
 }
 
 function gridiCiz() {
@@ -3272,6 +3296,7 @@ function gridiCiz() {
   gridEl.style.gridTemplateColumns = `repeat(${GRID_SUTUN}, 1fr)`;
   gridEl.style.gridTemplateRows = `repeat(${GRID_SATIR}, 1fr)`;
   gridEl.style.aspectRatio = `${GRID_SUTUN} / ${GRID_SATIR}`;
+  gridCerceveEl.style.setProperty("--n", GRID_SUTUN);
   inputlar = Array.from({ length: GRID_SATIR }, () => Array(GRID_SUTUN).fill(null));
   const grid = bulmaca.grid;
 
@@ -3295,7 +3320,8 @@ function gridiCiz() {
       input.setAttribute("maxlength", "1");
       input.setAttribute("autocomplete", "off");
       input.setAttribute("autocapitalize", "characters");
-      input.setAttribute("inputmode", "text");
+      input.setAttribute("inputmode", EKRAN_KLAVYESI ? "none" : "text");
+      if (EKRAN_KLAVYESI) input.readOnly = true; // yazı ekran klavyesinden/tusaBas'tan gelir
       input.setAttribute("aria-label", `Satır ${r + 1}, sütun ${c + 1}`);
       input.dataset.r = r;
       input.dataset.c = c;
@@ -3310,8 +3336,19 @@ function gridiCiz() {
       // odaklanıldığında mevcut içeriği SEÇİLİ hâle getir -- böylece yeni bir
       // karakter yazmak her zaman bir SİLME+EKLEME işlemi olur ve "input"
       // olayı, yazılan harf aynı olsa bile, garanti şekilde tetiklenir.
-      input.addEventListener("focus", () => { hucreSec(r, c, null); input.select(); });
-      input.addEventListener("click", () => { hucreSec(r, c, "toggle"); input.select(); });
+      // 99+. Adım (hata düzeltmesi): önceden `click` HER ZAMAN "toggle" ile
+      // seçiyordu; ama `focus` (click'ten önce) hücreyi zaten seçtiği için,
+      // başka bir hücreye ilk tıklama bile yönü çeviriyordu. Artık yön yalnızca
+      // dokunuş/tıklama SIRASINDA zaten seçili olan hücreye tekrar basılınca
+      // değişir (pointerdown, focus'tan önce gelir).
+      let tikOncesiAyniHucre = false;
+      input.addEventListener("pointerdown", () => { tikOncesiAyniHucre = (secim.r === r && secim.c === c); });
+      input.addEventListener("focus", () => { hucreSec(r, c, null); if (!EKRAN_KLAVYESI) input.select(); });
+      input.addEventListener("click", () => {
+        hucreSec(r, c, tikOncesiAyniHucre ? "toggle" : null);
+        tikOncesiAyniHucre = false;
+        if (!EKRAN_KLAVYESI) input.select();
+      });
       input.addEventListener("input", (e) => harfGirisi(e, r, c));
       input.addEventListener("keydown", (e) => tusaBas(e, r, c));
 
@@ -3340,7 +3377,8 @@ function tanimlariCiz() {
       const idx = Number(li.dataset.idx);
       const y = bulmaca.yerlesenler[idx];
       hucreSec(y.satir, y.sutun, "yatay");
-      inputlar[y.satir][y.sutun]?.focus();
+      inputlar[y.satir][y.sutun]?.focus({ preventScroll: EKRAN_KLAVYESI });
+      ekranIcinGrideKaydir();
     });
   });
   listeDikeyEl.querySelectorAll(".tanim-oge").forEach(li => {
@@ -3348,7 +3386,8 @@ function tanimlariCiz() {
       const idx = Number(li.dataset.idx);
       const y = bulmaca.yerlesenler[idx];
       hucreSec(y.satir, y.sutun, "dikey");
-      inputlar[y.satir][y.sutun]?.focus();
+      inputlar[y.satir][y.sutun]?.focus({ preventScroll: EKRAN_KLAVYESI });
+      ekranIcinGrideKaydir();
     });
   });
 }
@@ -3378,6 +3417,7 @@ function hucreSec(r, c, istekYon) {
 
   secim = { r, c, yon };
   vurgulariGuncelle();
+  if (EKRAN_KLAVYESI && !sessizSecim) hucreyiGorunurYap(r, c);
 }
 
 function vurgulariGuncelle() {
@@ -3390,10 +3430,10 @@ function vurgulariGuncelle() {
   }
   document.querySelectorAll(".tanim-oge").forEach(li => li.classList.remove("aktif-tanim"));
 
-  if (secim.r < 0) return;
+  if (secim.r < 0) { dockGuncelle(); return; }
   const meta = harita[secim.r][secim.c];
   const idx = meta[secim.yon];
-  if (idx === null) return;
+  if (idx === null) { dockGuncelle(); return; }
   const y = bulmaca.yerlesenler[idx];
 
   for (let i = 0; i < y.kelime.length; i++) {
@@ -3409,8 +3449,169 @@ function vurgulariGuncelle() {
     // 95. Adım: iki liste artık her zaman görünür (yan yana) olduğu için
     // "gizli değilse kaydır" koşulu kaldırıldı -- ikisi de her zaman
     // görünür, dolayısıyla ikisi için de koşulsuz kaydırma güvenli.
-    li.scrollIntoView({ block: "nearest" });
+    // 99+. Adım: scrollIntoView sayfanın tamamını da kaydırıyordu (dar/tek
+    // sütunlu düzende ızgaradan ipucu listesine sıçrıyordu); artık yalnızca
+    // listenin kendi içinde kaydırılıyor.
     sekmeSec(y.yon);
+    listeIcindeGoster(li);
+  }
+  dockGuncelle();
+}
+
+function listeIcindeGoster(li) {
+  const liste = li.parentElement;
+  if (!liste) return;
+  const lr = liste.getBoundingClientRect(), ir = li.getBoundingClientRect();
+  if (lr.height === 0) return; // gizli sekme
+  if (ir.top < lr.top) liste.scrollTop -= (lr.top - ir.top);
+  else if (ir.bottom > lr.bottom) liste.scrollTop += (ir.bottom - lr.bottom);
+}
+
+/* ---------------- Mobil dock: ipucu şeridi + ekran klavyesi ---------------- */
+function dockGuncelle() {
+  if (!EKRAN_KLAVYESI || !dockMetinEl) return;
+  const yazi = dockMetinEl.querySelector(".dock-yazi");
+  if (kutlamaEl.classList.contains("gorunur")) { yazi.textContent = "Tebrikler, bulmaca tamam! 🎉"; return; }
+  if (!bulmaca || secim.r < 0) { yazi.textContent = "Bir kareye dokun"; return; }
+  const idx = harita[secim.r][secim.c][secim.yon];
+  if (idx === null) { yazi.textContent = "Bir kareye dokun"; return; }
+  const y = bulmaca.yerlesenler[idx];
+  const numara = bulmaca.grid[y.satir][y.sutun].numara;
+  const tanim = (TANIMLAR[y.kelime] && TANIMLAR[y.kelime].tanim) || "?";
+  yazi.innerHTML = `<span class="dock-no">${numara}${y.yon === "yatay" ? "→" : "↓"}</span>${tanim} <span class="dock-uzunluk">(${y.kelime.length})</span>`;
+}
+
+function hucreyiGorunurYap(r, c) {
+  const input = inputlar && inputlar[r] && inputlar[r][c];
+  if (!input || !dockEl || dockEl.hidden) return;
+  const rect = input.getBoundingClientRect();
+  const dockUst = dockEl.getBoundingClientRect().top;
+  if (rect.bottom > dockUst - 8) window.scrollBy(0, rect.bottom - dockUst + 16);
+  else if (rect.top < 8) window.scrollBy(0, rect.top - 16);
+}
+
+/** İpucu listesinden bir kelimeye dokunulunca ızgarayı ekrana getirir. */
+function ekranIcinGrideKaydir() {
+  if (!EKRAN_KLAVYESI || !gridCerceveEl) return;
+  const top = gridCerceveEl.getBoundingClientRect().top;
+  if (top < 0 || top > window.innerHeight * 0.5) {
+    window.scrollTo({ top: window.scrollY + top - 8, behavior: "smooth" });
+  }
+}
+
+function kelimeSirasi() {
+  const no = (y) => bulmaca.grid[y.satir][y.sutun].numara;
+  const hepsi = bulmaca.yerlesenler.map((y, idx) => ({ ...y, idx }));
+  const sirala = (a, b) => no(a) - no(b);
+  return [
+    ...hepsi.filter((y) => y.yon === "yatay").sort(sirala),
+    ...hepsi.filter((y) => y.yon === "dikey").sort(sirala),
+  ];
+}
+
+function kelimeGit(adim) {
+  if (!bulmaca) return;
+  const sira = kelimeSirasi();
+  const mevcut = secim.r >= 0 ? harita[secim.r][secim.c][secim.yon] : null;
+  let i = sira.findIndex((y) => y.idx === mevcut);
+  i = i < 0 ? (adim > 0 ? 0 : sira.length - 1) : (i + adim + sira.length) % sira.length;
+  const y = sira[i];
+  let hr = y.satir, hc = y.sutun;
+  for (let k = 0; k < y.kelime.length; k++) {
+    const r = y.yon === "dikey" ? y.satir + k : y.satir;
+    const c = y.yon === "yatay" ? y.sutun + k : y.sutun;
+    if (!inputlar[r][c].value) { hr = r; hc = c; break; }
+  }
+  hucreSec(hr, hc, y.yon);
+  inputlar[hr][hc].focus({ preventScroll: true });
+}
+
+function dockYonDegistir() {
+  if (secim.r < 0) return;
+  const m = harita[secim.r][secim.c];
+  if (m.yatay !== null && m.dikey !== null) hucreSec(secim.r, secim.c, secim.yon === "yatay" ? "dikey" : "yatay");
+}
+
+function ekranHarfYaz(harf) {
+  if (!bulmaca || secim.r < 0) return;
+  const input = inputlar[secim.r][secim.c];
+  if (!input) return;
+  input.value = harf;
+  harfGirisi({ target: input }, secim.r, secim.c);
+}
+
+function ekranSil() {
+  if (!bulmaca || secim.r < 0) return;
+  const input = inputlar[secim.r][secim.c];
+  if (!input) return;
+  if (input.value) {
+    input.value = "";
+    input.parentElement.classList.remove("dogru", "yanlis");
+    return;
+  }
+  const dr = secim.yon === "dikey" ? -1 : 0;
+  const dc = secim.yon === "yatay" ? -1 : 0;
+  const nr = secim.r + dr, nc = secim.c + dc;
+  if (nr >= 0 && nr < GRID_SATIR && nc >= 0 && nc < GRID_SUTUN && inputlar[nr][nc]) {
+    inputlar[nr][nc].focus({ preventScroll: true });
+    inputlar[nr][nc].value = "";
+    inputlar[nr][nc].parentElement.classList.remove("dogru", "yanlis");
+    hucreSec(nr, nc, null);
+  }
+}
+
+function ilkKelimeyiSec() {
+  if (!EKRAN_KLAVYESI || !bulmaca || !bulmaca.yerlesenler.length) { dockGuncelle(); return; }
+  const sira = kelimeSirasi();
+  const y = sira[0];
+  sessizSecim = true;
+  try { hucreSec(y.satir, y.sutun, y.yon); } finally { sessizSecim = false; }
+}
+
+function ekranKlavyesiKur() {
+  if (TELEFON) {
+    [...boyutSecEl.options].forEach((o) => { if (parseInt(o.value, 10) > TELEFON_EN_BUYUK_BOYUT) o.remove(); });
+    boyutSecEl.value = TELEFON_VARSAYILAN_BOYUT;
+  }
+  if (!EKRAN_KLAVYESI) return;
+  document.body.classList.add("ekran-klavyesi");
+  const siralar = ["QWERTYUIOPĞÜ", "ASDFGHJKLŞİ", "ZXCVBNMÖÇ"];
+  siralar.forEach((sira, i) => {
+    const div = document.createElement("div");
+    div.className = "dock-sira";
+    for (const h of sira) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "tus"; b.textContent = h; b.dataset.harf = h;
+      div.appendChild(b);
+    }
+    if (i === siralar.length - 1) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "tus tus-sil"; b.dataset.sil = "1"; b.setAttribute("aria-label", "Sil");
+      b.innerHTML = '<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M9 5h11a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-6-7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 9l5 6M17 9l-5 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+      div.appendChild(b);
+    }
+    dockKlavyeEl.appendChild(div);
+  });
+  // Düğmeye basmak yazı alanının odağını kapmasın.
+  dockEl.addEventListener("pointerdown", (e) => { if (e.target.closest("button")) e.preventDefault(); });
+  dockEl.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.dataset.harf) ekranHarfYaz(b.dataset.harf);
+    else if (b.dataset.sil) ekranSil();
+  });
+  dockOncekiEl.addEventListener("click", () => kelimeGit(-1));
+  dockSonrakiEl.addEventListener("click", () => kelimeGit(1));
+  dockMetinEl.addEventListener("click", dockYonDegistir);
+  dockEl.hidden = false;
+  const yukGuncelle = () => document.documentElement.style.setProperty("--dock-yuk", dockEl.offsetHeight + "px");
+  if (window.ResizeObserver) new ResizeObserver(yukGuncelle).observe(dockEl);
+  yukGuncelle();
+  // Dar ekranda durum mesajı (onay/kayıt adı vb.) kaydırılmış sayfada kaçmasın.
+  if (window.matchMedia("(max-width: 860px)").matches) {
+    new MutationObserver(() => {
+      if (durumMesajiEl.textContent.trim()) durumMesajiEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }).observe(durumMesajiEl, { childList: true, characterData: true, subtree: true });
   }
 }
 
@@ -3436,6 +3637,14 @@ function sonrakiHucreyeGec(r, c) {
 }
 
 function tusaBas(e, r, c) {
+  if (EKRAN_KLAVYESI) {
+    // Alanlar salt-okunur (ekran klavyesi); fiziksel klavyeden gelen harf ve
+    // Backspace'i burada işliyoruz.
+    if (e.key === "Backspace") { e.preventDefault(); ekranSil(); return; }
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1 && /\p{L}/u.test(e.key)) {
+      e.preventDefault(); ekranHarfYaz(e.key); return;
+    }
+  }
   const yonHareket = {
     ArrowRight: [0, 1, "yatay"],
     ArrowLeft: [0, -1, "yatay"],
@@ -3482,6 +3691,7 @@ function otomatikTamamlanmaKontrolu() {
   }
   const tamamlandiMi = tamDolu && tamDogru;
   kutlamaEl.classList.toggle("gorunur", tamamlandiMi);
+  dockGuncelle();
   // 98. Adım: bulmaca tamamlanınca kronometre otomatik durur -- ama bu
   // "yarıda bırakma" DEĞİL, o yüzden uyarı overlay'i gösterilmez.
   if (tamamlandiMi && kronometreCalisiyor) kronometreDurdur({ uyariGoster: false });
@@ -3510,6 +3720,7 @@ function kontrolEt() {
 
   const tamamMi = doluSayisi === hucreSayisi && yanlisSayisi === 0;
   kutlamaEl.classList.toggle("gorunur", tamamMi);
+  dockGuncelle();
   // 98. Adım: bkz. otomatikTamamlanmaKontrolu'ndaki aynı not.
   if (tamamMi && kronometreCalisiyor) kronometreDurdur({ uyariGoster: false });
 
@@ -4045,4 +4256,5 @@ async function sozlukYukleVeBasla() {
   }
 }
 
+ekranKlavyesiKur();
 sozlukYukleVeBasla();
