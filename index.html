@@ -10,6 +10,7 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="tr_TR">
 <meta property="og:site_name" content="Bulmaca Masası">
@@ -807,8 +808,9 @@
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 6px;
     }
-    .kontrol-cubugu > .boyut-secici { justify-content: flex-start; }
-    .kontrol-cubugu > .boyut-secici select { font-size: 1rem; padding: 6px; }
+    .kontrol-cubugu > .boyut-secici { justify-content: flex-start; min-width: 0; }
+    .kontrol-cubugu > .boyut-secici label { flex-direction: column; align-items: stretch; gap: 2px; width: 100%; min-width: 0; }
+    .kontrol-cubugu > .boyut-secici select { font-size: 1rem; padding: 6px; width: 100%; min-width: 0; box-sizing: border-box; }
     .kontrol-cubugu > .kronometre { grid-column: span 2; justify-content: space-between; }
     .kontrol-cubugu button { padding: 9px 4px; font-size: 0.8rem; min-height: 40px; }
     #btn-yazdir { display: none; }
@@ -1079,7 +1081,7 @@
     </div>
   </div>
 
-  <footer>Kelimeler ve ipuçları özgün olarak yazılmıştır (~77.500 kelime). Bulmacalar tarayıcınızda anında kurulur; kaydettikleriniz yalnızca bu cihazın tarayıcısında saklanır. Çerezsiz, anonim bir ziyaretçi sayacı (GoatCounter) kullanılır. <span style="opacity:.5">(sürüm 2026-10-10-g104)</span></footer>
+  <footer>Kelimeler ve ipuçları özgün olarak yazılmıştır (~77.500 kelime). Bulmacalar tarayıcınızda anında kurulur; kaydettikleriniz yalnızca bu cihazın tarayıcısında saklanır. Çerezsiz, anonim bir ziyaretçi sayacı (GoatCounter) kullanılır. <span style="opacity:.5">(sürüm 2026-10-25-g105)</span></footer>
 </div>
 
 <div id="mobil-dock" class="mobil-dock" hidden>
@@ -1093,8 +1095,9 @@
   </div>
 </div>
 
+<script>if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) { window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); }); }</script>
 <noscript><p style="max-width:40rem;margin:2rem auto;padding:0 1rem;font-family:sans-serif">Bulmaca Masası tarayıcıda JavaScript ile çalışır. Lütfen JavaScript'i etkinleştirin.</p></noscript>
-<script src="bulmaca.js?v=2026-10-10-g104" defer></script>
+<script src="bulmaca.js?v=2026-10-25-g105" defer></script>
 <script data-goatcounter="https://bpunar.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </body>
 </html>
